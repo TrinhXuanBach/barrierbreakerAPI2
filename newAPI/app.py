@@ -4,9 +4,9 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import text
 from sqlite3 import connect
 from model import Home
-
+from model import DataMonth
 app = Flask(__name__)
-
+ 
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///web_combined_ds.db' 
 db = SQLAlchemy(app)
 
@@ -20,7 +20,7 @@ def getData():
         first    = (page - 1)*20
         last     = page*20
 
-        sql = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date  
+        sql = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date, Address  
                     FROM Web_Combined_Table 
                     WHERE District = '{}' AND (Price BETWEEN '{}' AND '{}') 
                     LIMIT {} '''.format(district, minPrice, maxPrice, last))
@@ -29,6 +29,7 @@ def getData():
                         FROM Web_Combined_Table
                         WHERE District = '{}' AND (Price BETWEEN '{}' AND '{}')'''
                         .format(district, minPrice, maxPrice))
+
         result = db.engine.execute(sql)
         result_average = db.engine.execute(query)
 
@@ -46,14 +47,42 @@ def getData():
 
         for x in range(first, last):
             row  = total_row[x]
-            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date']) 
-            listData.append(home.toJson())
+            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date'], row['Address']) 
+            listData.append((home.__dict__))
 
-        return json.dumps({'average' : average,'list_data' : listData})
+        return json.dumps({'average' : average, 'list_data' : listData})
     except Exception as e:
         print(e)
         return "error"
 
+@app.route('/getChart', methods = ['GET'])
+def getChart():
+    try:
+        district = request.args.get('district')
+        ward     = request.args.get('ward')
+        street   = request.args.get('street')
+        print(district)
+        print(ward)
+        print(street)
+        query    = text('''
+            SELECT avg(Price) as 'average', Month as 'month'
+                FROM  Web_Combined_Table
+                WHERE District = '{}' AND Price != 'thỏa thuận' AND Month >= '6' AND Ward = '{}' AND Street = '{}'
+                GROUP By Month
+                ORDER BY month ASC'''.format(district, ward, street))
+        result   = db.engine.execute(query)
+        total_row = result.fetchall()
+        result.close()
+        listData = []
+        print(total_row)
+        for row in total_row:
+            month = row['month']
+            average = row['average']
+            listData.append(DataMonth(month, average).__dict__)
+        return json.dumps(listData)
+    except Exception as error:
+        print(error)
+        return "error"
 
 @app.route('/detailByMenu', methods = ['GET'])
 def getDetailDataByMenu():
@@ -65,12 +94,14 @@ def getDetailDataByMenu():
         page = int(request.args.get('page'))
     
 
+
+
         first    = (page - 1)*20
         last     = page*20
 
         condition = conditionQuery(area=area, street=street, ward=ward, orientation=orientation)
 
-        query = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date
+        query = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date, Address
                     FROM Web_Combined_Table 
                     WHERE {}
                     LIMIT {}'''.format(condition, last))
@@ -87,8 +118,8 @@ def getDetailDataByMenu():
 
         for index in range(first, last):
             row  = total_row[index]
-            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date'])
-            listData.append(home.toJson())            
+            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date'], row['Address'])
+            listData.append(home.__dict__)            
 
         return json.dumps(listData)
     except Exception as error:
@@ -99,7 +130,7 @@ def getDetailBySearch():
     try:
         listData = []
         address = request.args.get('address')
-        query   = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date
+        query   = text('''SELECT Price, Area, Num_Bathroom, Num_Bedroom, Img_Src, Date, Address
                          FROM Web_Combined_Table
                          WHERE Address LIKE '%{}%' '''.format(address))
 
@@ -108,12 +139,13 @@ def getDetailBySearch():
         result.close()
 
         for row in total_row:
-            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date'])
-            listData.append(home.toJson())
+            home = Home(row['Price'], row['Area'], row['Num_Bathroom'], row['Num_Bedroom'], row['Img_Src'], row['Date'], row['Address'])
+            listData.append(home.__dict__)
         return json.dumps(listData)
 
     except Exception as error:
         return "error"
+
 
 @app.route('/getDetailAHome', methods = ['GET'])
 def getDetailAHome():
